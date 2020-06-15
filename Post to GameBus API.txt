@@ -1,0 +1,54 @@
+import csv, json
+import requests
+from datetime import datetime
+from datetime import date
+urlpost = "https://api.gamebus.eu/v2/activities?dryrun=false&fields=personalPoints.value"
+
+success_dates = []
+#The next two lines create a json file. This is only required for the first run.
+with open('data.txt', 'w') as outfile:
+            json.dump({ "dates":  success_dates }, outfile)
+        
+#loading the data from the json file        
+with open('data.txt') as json_file:
+    data = json.load(json_file)
+    if data["dates"]:
+        success_dates = data["dates"]
+
+#Reading the csv file        
+with open('glucose-test-data.csv') as file:
+    reader = csv.reader(file, delimiter=',')
+    #Skipping the first two lines of csv file. These don not contian the measurements.
+    next(reader)
+    next(reader)
+    
+    for records in reader:
+        #only considering the non-empty rows
+        if any(records[4]):
+            current_date = records[2]
+            date_timestamp = datetime.strptime(current_date,'%Y-%m-%d %H:%M').timestamp() * 1000
+            date_timestamp = round(date_timestamp)
+            #Checking if the data is already there is the json file, so that we don't post the same data twice
+            if (str(date_timestamp) not in success_dates):
+                dictionary = {
+                        'gameDescriptor': 61,
+                        'dataProvider': 1,
+                        'date': date_timestamp,
+                        'propertyInstances': [
+                            { 'property': 87, 'value': None },
+                            { 'property': 88, 'value': float(records[4]) },
+                            { 'property': 89, 'value': None }
+                        ],
+                        'players': [103699]
+
+                }
+                headers1= {
+                      "Authorization": "Bearer 940f25f6-3610-47dd-8fb2-0204130fb44d"
+                 }
+                json_dump = json.dumps(dictionary)
+                response = requests.request("POST", urlpost, headers=headers1, files = {"activity": str(json_dump)})
+                if response.status_code > 199 & response.status_code < 300:
+                    success_dates.append(date_timestamp)
+        #Adding the posted data to the json file(if posted)
+        with open('data.txt', 'w') as outfile:
+            json.dump({ "dates":  success_dates }, outfile)
